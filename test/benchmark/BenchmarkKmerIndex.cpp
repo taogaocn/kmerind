@@ -611,7 +611,6 @@ int main(int argc, char** argv) {
 		  BL_BENCH_COLLECTIVE_END(test, "find", found.size(), comm);
 	  }
 #endif
-#endif
 #if 0
 	  // separate test because of it being potentially very slow depending on imbalance.
 	  {
@@ -631,7 +630,8 @@ int main(int argc, char** argv) {
 	    BL_BENCH_COLLECTIVE_END(test, "find_overlap", found.size(), comm);
 	    }
 #endif
-    // separate test because of it being potentially very slow depending on imbalance.
+    // separate test because of it being potentially very slow depending on imbalance
+#if 0
     {
       auto lquery = query;
 
