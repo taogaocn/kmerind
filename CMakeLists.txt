@@ -127,7 +127,7 @@ BLISS_CXX_COMPILER_VERSION
 
   if(BLISS_CXX_COMPILER_VERSION VERSION_LESS "4.8.1")
     message(FATAL_ERROR "GNU CXX compiler version 4.8.1 or later is required.
-Found ${CMAKE_CXX_COMPILER_VERSION}")
+Found ${CMAKE_CXX_COMPILER_VERSION}, Compiler ${CMAKE_CXX_COMPILER}")
   endif()
 
   SET(SUPPORTS_SANITIZER ON CACHE INTERNAL "compiler supports sanitizer?")

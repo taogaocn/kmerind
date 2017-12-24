@@ -35,6 +35,7 @@
 #include <sstream>
 #include <chrono>
 #include <iostream>  // for system("pause");
+#include <dirent.h>
 
 #include "utils/logging.h"
 #include "utils/transform_utils.hpp"
@@ -97,6 +98,56 @@
 #define CANONICAL 52
 #define BIMOLECULE 53
 
+#define MAXLINE 1024
+
+void get_file_list(const char* filepath, int recurse,
+                   std::vector<std::string>& filelist) {
+
+    struct stat inpath_stat;
+    int err = stat(filepath, &inpath_stat);
+    if (err) {
+        fprintf(stderr, "Error in get input files\n");
+        exit(1);
+    }
+
+    if (S_ISREG(inpath_stat.st_mode)) {
+        filelist.push_back(filepath);
+    }
+    else if (S_ISDIR(inpath_stat.st_mode)) {
+        struct dirent *ep;
+        DIR *dp = opendir(filepath);
+        if (!dp) {
+            fprintf(stderr, "Error in get input files\n");
+            exit(1);
+        }
+
+        while ((ep = readdir(dp)) != NULL) {
+#ifdef BGQ
+            if (ep->d_name[1] == '.') continue;
+#else
+            if (ep->d_name[0] == '.') continue;
+#endif
+            char newstr[MAXLINE];
+#ifdef BGQ
+            sprintf(newstr, "%s/%s", filepath, &(ep->d_name[1]));
+#else
+            sprintf(newstr, "%s/%s", filepath, ep->d_name);
+#endif
+            err = stat(newstr, &inpath_stat);
+            if (err) {
+                fprintf(stderr, "Error in get input files, err=%d\n", err);
+                exit(1);
+            }
+
+            if (S_ISREG(inpath_stat.st_mode)) {
+                filelist.push_back(newstr);
+            }
+            else if (S_ISDIR(inpath_stat.st_mode) && recurse) {
+                get_file_list(newstr, recurse, filelist);
+            }
+        }
+    }
+}
 
 
 //================= define types - changeable here...
@@ -113,7 +164,7 @@ using Alphabet = bliss::common::DNA;
 #if defined(pK)
 using KmerType = bliss::common::Kmer<pK, Alphabet, WordType>;
 #else
-using KmerType = bliss::common::Kmer<21, Alphabet, WordType>;
+using KmerType = bliss::common::Kmer<22, Alphabet, WordType>;
 #endif
 
 //============== index input file format
@@ -485,9 +536,14 @@ int main(int argc, char** argv) {
 
   // ================  read and get file
   IndexType idx(comm);
+  std::vector<std::string> filelist;
+  get_file_list(filename.c_str(), 1, filelist);
+
+  if (comm.rank() == 0) printf("file count=%ld\n", filelist.size());
 
   BL_BENCH_INIT(test);
 
+#if 0
   if (comm.rank() == 0) printf("reading query %s via posix\n", queryname.c_str());
   BL_BENCH_START(test);
   auto query = readForQuery_posix<IndexType>(queryname, comm);
@@ -496,7 +552,7 @@ int main(int argc, char** argv) {
   BL_BENCH_START(test);
   sample(query, query.size() / sample_ratio, comm.rank(), comm);
   BL_BENCH_COLLECTIVE_END(test, "sample", query.size(), comm);
-
+#endif
 
   {
 	  ::std::vector<typename IndexType::KmerParserType::value_type> temp;
@@ -509,7 +565,10 @@ int main(int argc, char** argv) {
 //		idx.read_file<PARSER_TYPE, typename IndexType::KmerParserType>(filename, temp, comm);
 //
 //	  } else
-	  if (reader_algo == 5) {
+
+          for (auto filename : filelist) {
+          if (comm.rank() == 0) printf("read file %s\n", filename.c_str());
+          if (reader_algo == 5) {
 		if (comm.rank() == 0) printf("reading %s via mmap\n", filename.c_str());
 		::bliss::io::KmerFileHelper::read_file_mmap<typename IndexType::KmerParserType, PARSER_TYPE, bliss::io::SequencesIterator>(filename, temp, comm);
 
@@ -523,6 +582,7 @@ int main(int argc, char** argv) {
 	  } else {
 		throw std::invalid_argument("missing file reader type");
 	  }
+          }
 	  BL_BENCH_COLLECTIVE_END(test, "read", temp.size(), comm);
 
 	  size_t total = mxx::allreduce(temp.size(), comm);
@@ -537,7 +597,7 @@ int main(int argc, char** argv) {
   }
 
   {
-
+#if 0
 	  {
 		  auto lquery = query;
 		  BL_BENCH_START(test);
@@ -550,6 +610,8 @@ int main(int argc, char** argv) {
 		  auto found = idx.find(lquery);
 		  BL_BENCH_COLLECTIVE_END(test, "find", found.size(), comm);
 	  }
+#endif
+#endif
 #if 0
 	  // separate test because of it being potentially very slow depending on imbalance.
 	  {
@@ -559,6 +621,8 @@ int main(int argc, char** argv) {
 	  auto found = idx.find_collective(lquery);
 	  BL_BENCH_COLLECTIVE_END(test, "find_collective", found.size(), comm);
 	  }
+#endif
+#if 0
 	    {
 	      auto lquery = query;
 
@@ -566,6 +630,7 @@ int main(int argc, char** argv) {
 	    auto found = idx.find_overlap(lquery);
 	    BL_BENCH_COLLECTIVE_END(test, "find_overlap", found.size(), comm);
 	    }
+#endif
     // separate test because of it being potentially very slow depending on imbalance.
     {
       auto lquery = query;
@@ -575,11 +640,11 @@ int main(int argc, char** argv) {
     BL_BENCH_COLLECTIVE_END(test, "find_sendrecv", found.size(), comm);
     }
 #endif
-
+#if 0
 	  BL_BENCH_START(test);
 	  idx.erase(query);
 	  BL_BENCH_COLLECTIVE_END(test, "erase", idx.local_size(), comm);
-
+#endif
   }
 
   
